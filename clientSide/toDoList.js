@@ -50,10 +50,10 @@ function displayListNotFound(){
    $("div").text("List not found");
 }
 
-// Function to execute once AJAX call goes through
+// Function to execute once AJAX call to get a list goes through
 function onListLoad(data, textStatus, jqXHR){
    
-   data.forEach(function(element, index){
+   data.items.forEach(function(element, index){
       $(".to_do_list").append("<li>" + element.content + "</li>");
    });
 
