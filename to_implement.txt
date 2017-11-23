@@ -1,0 +1,11 @@
+A proper page to display when a list is not found
+A home page with a "create list" button
+A way to add list items
+A way to edit list items, preferably just by clicking on the div
+Checkbox and cross-out of list items
+ORM
+Voice recording
+A way to reorder list items
+Optional password protection for lists
+Removal of old and/or empty lists
+Protection of database (from too many requests, etc)
