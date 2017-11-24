@@ -1,9 +1,14 @@
+Tweak:
+Make item content input resize as things are written into it.
+Make items allow for newlines.
+Make buttons on items not stretch vertically (i.e., fix their size)
+Make items actually save to database once edited.
+
+Implement:
+
 A proper page to display when a list is not found
 A home page with a "create list" button
-A way to add list items
-A way to edit list items, preferably just by clicking on the div
 Checkbox and cross-out of list items
-ORM
 Voice recording
 A way to reorder list items
 Optional password protection for lists
