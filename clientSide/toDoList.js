@@ -53,7 +53,11 @@ function displayListPage(){
       
    // Add handlers to the footer buttons
    $(".create_new_item_btn").on("click", newItemButtonHandler);
+   $(".record_new_item_btn").on("click", recordNewItemButtonHandler);
 }
+
+//TODO: comment, and move up
+var largestUncheckedListOrder = -1;
 
 // Populates todo list once AJAX call gets through.
 function onListLoad(data, textStatus, jqXHR){
@@ -61,7 +65,8 @@ function onListLoad(data, textStatus, jqXHR){
    $("list_name").contents(data.name);
    
    data.items.forEach(function(element, index){
-      addListItem(element.content, index);
+      largestUncheckedListOrder = Math.max(largestUncheckedListOrder, element.listOrder)
+      addListItem(element.content, element.listOrder);
    });
 }
 
@@ -108,13 +113,95 @@ function stringIsAlphanumeric(someString){
 
 function newItemButtonHandler(event){
    
-   // Figure out how many items there are already
-   var newOrderNumber = $(".item_card").length;
-   
    // Create an item
-   var newItemCard = addListItem("", newOrderNumber);
-   makeItemEditable(newItemCard);
+   ++largestUncheckedListOrder;  // it will have order one greater than the last
+   var $newItemCard = addListItem("", largestUncheckedListOrder);
+   
+   // Immediately give the option to edit this item, and mark this as an item being created
+   makeItemEditable($newItemCard, true);
 }
+
+function recordNewItemButtonHandler(event){
+   
+   // TODO: check what this checks (https? not chrome? not allowed?)
+   if (!('webkitSpeechRecognition' in window)) {
+     alert("Don't have webkitSpeechRecognition. Must use chrome, and must use https");
+     return;
+   }
+
+   // Create an item
+   ++largestUncheckedListOrder;  // it will have order one greater than the last
+   var $newItemCard = addListItem("", largestUncheckedListOrder);
+   
+   var $itemContents = $newItemCard.find(".item_card__text").first();
+   var $textArea = $('<textArea class="col-7 col-md-9 item_card__text"></textArea>');
+   $itemContents.replaceWith($textArea);
+   
+   // However, actually disable typing within the item, and give a special class to the text area
+   $textArea.attr("disabled", "").addClass("recording_text_area");
+   
+   // Get an object to interact with the voice recognizer
+   var recognition = new webkitSpeechRecognition();
+   var finalTranscript = '';
+   var recognitionFailed = false;
+   
+   // Stop recognition when user pauses
+   recognition.continuous = false;
+   
+   // Gather interim results as user speaks
+   recognition.interimResults = true;
+
+
+   // TODO: fill this out
+   recognition.onerror = function(event) {
+      if (event.error == 'no-speech') {
+         recognitionFailed = true;
+      }
+      if (event.error == 'audio-capture') {
+         recognitionFailed = true;
+      }
+      if (event.error == 'not-allowed') {
+         alert("Must use chrome, must use https");
+         recognitionFailed = true;
+      }
+   };
+   
+   // This gets called after every few words. Once the speech recognition thinks 
+   // it is done, the results are marked as final
+   recognition.onresult = function(event) {
+      var interimTranscript = '';
+      for (var i = event.resultIndex; i < event.results.length; ++i) {
+         if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+         } else {
+            interimTranscript += event.results[i][0].transcript;
+         }
+      }
+      
+      // Capitalize the first letter of the resulting sentence
+      finalTranscript = finalTranscript.charAt(0).toUpperCase() + finalTranscript.slice(1);
+      
+      // Place the resulting text in the actual text area
+      $(".recording_text_area").val(interimTranscript+finalTranscript);
+   };
+
+   // At the very end, update the database
+   recognition.onend = function() {
+      
+      // If something went wrong, we'll still display a blank entry
+      if (recognitionFailed) {
+         finalTranscript = "";
+      }
+      
+      // Pass the text area that we have been adding text to to our function
+      // that completes new item creation.
+      doneCreatingItem.call($(".recording_text_area").get(0));
+      
+   };
+
+   recognition.start();
+}
+
 
 // Handles button click on an "edit" button of a list item
 function editItemHandler(event){
@@ -122,14 +209,21 @@ function editItemHandler(event){
 }
 
 // Makes a particular item card text editable (for editing or after creation)
-function makeItemEditable(itemCard){
+// itemIsNew: true if this is a new item
+function makeItemEditable(itemCard, itemIsNew){
    var $itemContents = itemCard.find(".item_card__text").first();
    var itemText = $itemContents.text();
    var $textArea = $('<textArea class="col-7 col-md-9 item_card__text"></textArea>');
    $itemContents.replaceWith($textArea);
    $textArea.focus();
    $textArea.val(itemText);
-   $textArea.on("blur", doneEditingItem);
+   
+   // The SQL call will differ depending on whether we are creating this item or updating it.
+   if (itemIsNew){
+      $textArea.on("blur", doneCreatingItem);
+   } else {
+      $textArea.on("blur", doneEditingItem);
+   }
 }
 
 // Saves an edited item
@@ -140,8 +234,36 @@ function doneEditingItem(event){
    var itemCard = $textArea.closest(".item_card");
    var itemOrderIndex = itemCard.data("order");
    
-   // TODO: Save item to the database
+   // Save item to the database
+   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + itemCard.data("order"),{
+      type: "POST",
+      dataType: "json",
+      data: {
+         content: newItemText
+         }
+   });
+
+   // Replace input element with text
+   $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>')
+}
+
+// Inserts a new item once user is done editing it
+function doneCreatingItem(event){
+
+   var $textArea = $(this);
+   var newItemText = $textArea.val();
+   var itemCard = $textArea.closest(".item_card");
+   var itemOrderIndex = itemCard.data("order");
    
+   // Save item to the database
+   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/new",{
+      type: "POST",
+      dataType: "json",
+      data: {
+         content: newItemText
+         }
+   });
+
    // Replace input element with text
    $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>')
 }

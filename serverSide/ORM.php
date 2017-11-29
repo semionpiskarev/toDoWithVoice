@@ -124,19 +124,56 @@ class ToDoList
    function getItem($orderNumber){
       return new Item($this, $orderNumber);
    }
+   
+   function getSlug(){
+      return $this->slug;
+   }
+   
+   function insertItem($content){
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'INSERT INTO Items (listId, content, listOrder, checked)'
+         . ' SELECT Lists.listId, "' . $connectionObject->real_escape_string($content) . '"'
+         . ', MAX(Items.listOrder)+1, false'
+         . ' FROM Lists JOIN Items ON Lists.listId = Items.listId'
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->getSlug()) . '"'
+         . ' GROUP BY Lists.listId'
+      );
+      
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
+   }
 }
    
 class Item
 {
    # Knowledge of the parent list is mainly needed for the list slug
    private $parentList;
+   private $listOrder;
    
-   function __construct($parentList, $orderNumber){
+   function __construct($parent, $orderNumber){
       $this->parentList = $parent;
+      $this->listOrder = $orderNumber;
    }
    
    function changeContents($newContents){
+
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'UPDATE Items JOIN Lists ON Items.listId = Lists.listId' 
+         . ' SET Items.content = "' . $connectionObject->real_escape_string($newContents) . '"'
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->parentList->getSlug()) . '"'
+         . ' AND Items.listOrder = ' . $connectionObject->real_escape_string($this->listOrder)
+      );
       
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
    }
    
    function changeOrder($newOrderNumber){
