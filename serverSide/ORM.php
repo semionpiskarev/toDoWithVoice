@@ -1,5 +1,5 @@
 <?php
-require_once("./Credentials.php");
+require_once('/afs/cs.unc.edu/project/courses/comp426-f17/public_html/users/semion/finalProject/serverSide/Credentials.php');
 
 # A static class for interacting with the database on the level of whole lists
 class Database
@@ -32,12 +32,44 @@ class Database
    # Creates a new list entry in the database, with default title. Returns the slug
    # of the newly created list.
    static function createList(){
-      // Create a list
       
-      // Insert it into the database
+      $listSlug = Database::createRandomSlug();
+      
+      // Keep generating slugs until you get one that does not already
+      // exist
+      $listData = Database::getList($listSlug)->getData();
+      while ($listData != NULL){
+         $listSlug = Database::createRandomSlug();
+         $listData = Database::getList($listSlug)->getData();
+      }
+      
+      // Insert it into the database      
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'INSERT INTO Lists (title, slug)'
+         . ' VALUES ("My List", "' . $connectionObject->real_escape_string($listSlug) . '")'
+      );
+      
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
       
       // Return the slug
+      return $listSlug;
+   }
+   
+   private static function createRandomSlug(){
+      $symbols = array(0,1,2,3,4,5,6,7,8,9,'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z');
       
+      $slugLength = 10;
+      $slug = "";
+      
+      for ($i = 0; $i < $slugLength; ++$i){
+         $slug .= $symbols[rand(0, count($symbols)-1)]; //uppper bound is inclusive
+      }
+      return $slug;
    }
    
    # Gives an object for manipulating a list. Note that a SQL query is only issued
@@ -75,12 +107,6 @@ class ToDoList
          if (!$listDataResultHandle){  // Check for SQL error
             http_response_code(500);
             print('SQL error: ' . mysqli_error($connectionObject));
-            exit();
-         }
-         
-         if ($listDataResultHandle->num_rows == 0){   // Check for existence of list
-            http_response_code(404);
-            print('List not found: ' . $this->slug);
             exit();
          }
 
@@ -134,8 +160,8 @@ class ToDoList
       $resultHandle = $connectionObject->query(
          'INSERT INTO Items (listId, content, listOrder, checked)'
          . ' SELECT Lists.listId, "' . $connectionObject->real_escape_string($content) . '"'
-         . ', MAX(Items.listOrder)+1, false'
-         . ' FROM Lists JOIN Items ON Lists.listId = Items.listId'
+         . ', COALESCE(MAX(Items.listOrder)+1, 0), false'
+         . ' FROM Lists LEFT JOIN Items ON Lists.listId = Items.listId'
          . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->getSlug()) . '"'
          . ' GROUP BY Lists.listId'
       );
@@ -184,16 +210,36 @@ class Item
       
    }
    
-   function uncheck(){
+   function setCheckedStatus($newCheckedStatus){
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'UPDATE Items JOIN Lists ON Items.listId = Lists.listId' 
+         . ' SET Items.checked = ' . $connectionObject->real_escape_string($newCheckedStatus)
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->parentList->getSlug()) . '"'
+         . ' AND Items.listOrder = ' . $connectionObject->real_escape_string($this->listOrder)
+      );
       
-   }
-   
-   function getData(){
-
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
    }
    
    function delete(){
       
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'DELETE Items FROM Items JOIN Lists ON Items.listId = Lists.listId'
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->parentList->getSlug()) . '"'
+         . ' AND Items.listOrder = ' . $connectionObject->real_escape_string($this->listOrder)
+      );
+      
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
    }
 }
 ?>

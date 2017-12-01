@@ -2,6 +2,11 @@
    background-color: #1a6b2d;
 }
 
+.jumbotron {
+   margin: 25px 30px;
+   padding: 2.5rem 2rem;
+}
+
 .list_name {
    margin-left: 40px;
    margin-top: 10px;

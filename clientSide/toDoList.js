@@ -24,7 +24,31 @@ $(document).ready(function(){
 });
 
 function createLandingPage(){
-   
+   $(".page_body").append(
+      '<div class="jumbotron">\
+        <h1 class="jumbotron__main_title display-4">Do-It (with Voice)</h1>\
+        <p class="jumbotron__main_text lead">This is a simple to-do list app with shareable links and voice control in Google Chrome.</p>\
+        <hr class="my-4">\
+        <p>If you have already created a list, use the shareable link to access it. Otherwise, this button will create a new list and send you there.</p>\
+        <p class="jumbotron__sub_text lead">\
+          <button class="btn btn-success btn-lg jumbotron__btn_create_list" role="button">Create a List</button>\
+        </p>\
+      </div>');
+      
+   $(".jumbotron__btn_create_list").on("click", createListHandler);
+}
+
+function createListHandler(event){
+   // Make an ajax call and wait to be issued a list slug
+   $.ajax("./serverSide/RestInterface.php/Lists/new",{
+         type: "POST",
+         success: onListCreate
+      });
+}
+
+function onListCreate(data, textStatus, jqXHR){
+   // Redirect to the new list
+   window.location = "./?" + data.slug;
 }
 
 // Sets up the page for displaying a list.
@@ -66,12 +90,12 @@ function onListLoad(data, textStatus, jqXHR){
    
    data.items.forEach(function(element, index){
       largestUncheckedListOrder = Math.max(largestUncheckedListOrder, element.listOrder)
-      addListItem(element.content, element.listOrder);
+      addListItem(element.content, element.listOrder, element.checked);
    });
 }
 
 // Adds an item card to the to do list container
-function addListItem(contents, orderIndex){
+function addListItem(contents, orderIndex, checked=0){
    var newItem = $(
       '<div class="card item_card">\
          <div class="row  item_card__row">\
@@ -90,8 +114,52 @@ function addListItem(contents, orderIndex){
       );
    $(".to_do_list").append(newItem);
    newItem.data("order", orderIndex);
+   newItem.data("checked", checked);
+   
+   if (checked == 0){
+      newItem.find(".item_card__checkmark").css("display", "none");
+   } else {
+      newItem.find(".item_card__text").css("text-decoration", "line-through");
+   }
+   
    newItem.find(".item_card__edit_btn").on("click", editItemHandler);
+   newItem.find(".item_card__delete_btn").on("click", deleteItemHandler);
+   newItem.find(".item_card__checkbox").on("click", checkBoxClickHandler);
    return newItem;
+}
+
+function checkBoxClickHandler(event){
+   var $itemCard = $(this).closest(".item_card");
+   if ($itemCard.data("checked") != 0){
+      // Make it unchecked now
+      $itemCard.find(".item_card__checkmark").css("display", "none");
+      $itemCard.find(".item_card__text").css("text-decoration", "");
+      $itemCard.data("checked", 0);
+      
+      // Save item to the database
+      $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
+         type: "POST",
+         dataType: "json",
+         data: {
+            checked: 0
+         }
+      });
+      
+   } else {
+      // Make it checked
+      $itemCard.find(".item_card__checkmark").css("display", "");
+      $itemCard.find(".item_card__text").css("text-decoration", "line-through");
+      $itemCard.data("checked", 1);
+      
+      // Save item to the database
+      $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
+         type: "POST",
+         dataType: "json",
+         data: {
+            checked: 1
+         }
+      });
+   }
 }
 
 // Helper function for finding whether a string is alphanumeric. Can also be
@@ -119,6 +187,16 @@ function newItemButtonHandler(event){
    
    // Immediately give the option to edit this item, and mark this as an item being created
    makeItemEditable($newItemCard, true);
+}
+
+function deleteItemHandler(event){
+   var $itemCard = $(this).closest(".item_card");
+   var listOrder = $itemCard.data("order");
+   $itemCard.remove();
+   
+   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/delete/" + listOrder,{
+      type: "POST"
+   });
 }
 
 function recordNewItemButtonHandler(event){
@@ -231,11 +309,11 @@ function doneEditingItem(event){
 
    var $textArea = $(this);
    var newItemText = $textArea.val();
-   var itemCard = $textArea.closest(".item_card");
-   var itemOrderIndex = itemCard.data("order");
+   var $itemCard = $textArea.closest(".item_card");
+   var itemOrderIndex = $itemCard.data("order");
    
    // Save item to the database
-   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + itemCard.data("order"),{
+   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
       type: "POST",
       dataType: "json",
       data: {
@@ -244,7 +322,11 @@ function doneEditingItem(event){
    });
 
    // Replace input element with text
-   $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>')
+   $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>');
+   
+   if ($itemCard.data("checked") != 0){
+      $itemCard.find(".item_card__text").css("text-decoration", "line-through");
+   }
 }
 
 // Inserts a new item once user is done editing it
@@ -252,8 +334,8 @@ function doneCreatingItem(event){
 
    var $textArea = $(this);
    var newItemText = $textArea.val();
-   var itemCard = $textArea.closest(".item_card");
-   var itemOrderIndex = itemCard.data("order");
+   var $itemCard = $textArea.closest(".item_card");
+   var itemOrderIndex = $itemCard.data("order");
    
    // Save item to the database
    $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/new",{
@@ -265,7 +347,7 @@ function doneCreatingItem(event){
    });
 
    // Replace input element with text
-   $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>')
+   $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>');
 }
 
 function displayListInvalid(){
