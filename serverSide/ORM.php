@@ -118,8 +118,20 @@ class ToDoList
    
    # Updates the "name" field of the list. Note that this either needs to update
    # the cached "data" variable, or set it to false.
-   function rename(){
+   function rename($newTitle){
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'UPDATE Lists SET Lists.title = "' . $connectionObject->real_escape_string($newTitle) . '"'
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->slug) . '"'
+      );
       
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
+      
+      $this->data = false;
    }
 
    # Gets all the item rows associated with this list. This gives the actual row data, not

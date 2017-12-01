@@ -62,6 +62,13 @@ if ($pathInfo[1] == "Items"){ // first entry is blank (starts with '/')
       
       header("Content-type: application/json");
       print(json_encode($toSend));
+      exit();
+      
+   // Otherwise, we're updating the list data
+   } else {
+      $list = Database::getList($pathInfo[2]);
+      $list->rename($_REQUEST['title']);
+      exit();
    }
 
    

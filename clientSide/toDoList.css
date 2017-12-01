@@ -1,5 +1,24 @@
 .navbar{
    background-color: #1a6b2d;
+   border-bottom: 4px solid #144c21
+}
+
+.shareable_link__div {
+   text-align: center;
+   margin: 0px auto;
+   color: white;
+   background-color: #67c37c;
+   padding: 4px 0px;
+   border-bottom: 2px solid #30a54b;
+   font-size: 0.95rem;
+}
+
+.shareable_link__label{
+   user-select:none;
+}
+
+.shareable_link__span{
+   margin-left: 10px;
 }
 
 .jumbotron {
@@ -7,10 +26,18 @@
    padding: 2.5rem 2rem;
 }
 
-.list_name {
-   margin-left: 40px;
-   margin-top: 10px;
+.list_name{
+   display: flex;
+   align-items: flex-end;
 }
+   .list_name__name {
+      margin-left: 40px;
+      margin-top: 10px;
+   }
+   .list_name__icon {
+      margin-left: 10px;
+      margin-bottom: 8px;
+   }
 
 .to_do_list {
    margin: 5px;
@@ -33,6 +60,8 @@
    }
    .item_card__btn {
       margin: 3px;
+      height: 32px;
+      width: 32px;
    }
    .item_card__checkmark{
       font-size: 20px;

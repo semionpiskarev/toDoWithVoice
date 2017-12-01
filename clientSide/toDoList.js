@@ -53,8 +53,15 @@ function onListCreate(data, textStatus, jqXHR){
 
 // Sets up the page for displaying a list.
 function displayListPage(){
+   $(".page_body").append('<div class="shareable_link__div"><span class="shareable_link__label">Link: </span><span class="shareable_link__span"></span><div>');
+   
+   $(".shareable_link__span").text(window.location.href);
+   
    // Add placeholder for title
-   $(".page_body").append('<h2 class="list_name">My List</h2>');
+   $(".page_body").append('<div class="list_name"><h2 class="list_name__name"></h2><i class="fa fa-edit list_name__icon"></i><div>');
+   
+   // Attach List title edit button handler
+   $(".list_name__icon").on("click", makeTitleEditable);
    
    // Create place to add items
    $(".page_body").append('<div class="container to_do_list"></div>');
@@ -86,7 +93,7 @@ var largestUncheckedListOrder = -1;
 // Populates todo list once AJAX call gets through.
 function onListLoad(data, textStatus, jqXHR){
    
-   $("list_name").contents(data.name);
+   $(".list_name__name").text(data.name);
    
    data.items.forEach(function(element, index){
       largestUncheckedListOrder = Math.max(largestUncheckedListOrder, element.listOrder)
@@ -357,4 +364,32 @@ function displayListInvalid(){
 function displayListNotFound(){
    // TODO: needs to be changed
    $("div").text("List not found");
+}
+
+function makeTitleEditable(){
+   var $titleText = $(".list_name__name");
+   var titleText = $titleText.text();
+   var $inputArea = $('<input type="text" class="form_control list_name__name"></input>');
+   $titleText.replaceWith($inputArea);
+   $inputArea.focus();
+   $inputArea.val(titleText);
+   
+   $inputArea.on("blur", doneEditingTitle);
+}
+
+function doneEditingTitle(){
+   var $inputArea = $(this);
+   var newTitleText = $inputArea.val();
+   
+   // Save title to the database
+   $.ajax("./serverSide/RestInterface.php/Lists/" + queryString,{
+      type: "POST",
+      dataType: "json",
+      data: {
+         title: newTitleText
+         }
+   });
+
+   // Replace input element with text
+   $inputArea.replaceWith('<h2 class="list_name__name">' + newTitleText + '</h2>');
 }
