@@ -28,6 +28,7 @@ if ($pathInfo[1] == "Items"){ // first entry is blank (starts with '/')
          $item = $list->insertItem(trim($_REQUEST['content'])); // since we don't support whitespace, might as well trim
          exit();
       
+      // Are we deleting an item?
       } else if ($listOrder == "delete"){
          
          $listSlug = $pathInfo[2];
@@ -42,10 +43,13 @@ if ($pathInfo[1] == "Items"){ // first entry is blank (starts with '/')
          $item = $list->getItem($listOrder);
          
          if (array_key_exists('content', $_REQUEST)){
-            $item->changeContents(trim($_REQUEST['content']));
+            $item->setContents(trim($_REQUEST['content']));
          }
          if (array_key_exists('checked', $_REQUEST)){
             $item->setCheckedStatus(trim($_REQUEST['checked']));
+         }
+         if (array_key_exists('checkedOrder', $_REQUEST)){
+            $item->setCheckedOrder(trim($_REQUEST['checkedOrder']));
          }
          exit();
       }
@@ -121,7 +125,6 @@ class FullListResponse {
          $this->items = $listItems;
       }
 }
-
 class ListSlugResponse {
    public $slug;
    

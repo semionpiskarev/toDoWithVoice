@@ -39,7 +39,7 @@
       margin-bottom: 8px;
    }
 
-.to_do_list {
+.to_do_list, .done_list {
    margin: 5px;
 }
 
@@ -47,6 +47,7 @@
    min-width: 340px;
    max-width: 930px;
    margin-bottom: 3px;
+   transition: initial; /* should not be overriden to allow jQuery slideUp() to work */
 }
    .item_card__checkbox{
       border: solid black;
@@ -86,3 +87,7 @@
       margin: 5px;
       width: 120px;
    }
+ 
+.error_header, .error_text{
+   margin: 20px;
+}

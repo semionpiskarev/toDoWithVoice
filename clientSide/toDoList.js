@@ -1,3 +1,16 @@
+/**
+   Core client-side code for interacting with the to-do list app.
+*/
+
+// Since we use the "order" property as an identifier, we need to keep
+// track of the largest order value to insert new items. The database will
+// automatically set the order, so this is just for our own record keeping.
+var largestListOrder = -1;
+
+// Sets how quickly items appear/disappear when checked and unchecked
+const APPEAR_TRANSITION_DURATION = 350;
+
+// Page initialization
 $(document).ready(function(){
    
    if (queryString == ""){
@@ -8,13 +21,11 @@ $(document).ready(function(){
    // that the user could make up any kind of AJAX call.   
    } else if (stringIsAlphanumeric(queryString)){
       
-      displayListPage();
-      
       // Make an AJAX call to our REST interface to get the list items 
       $.ajax("./serverSide/RestInterface.php/" + queryString,{
          type: "GET",
          dataType: "json",
-         success: onListLoad, // fills in title, list items, activates buttons
+         success: displayListPage, // fills in title, list items, activates buttons
          error: displayListNotFound
       });
       
@@ -23,6 +34,9 @@ $(document).ready(function(){
    }
 });
 
+/** 
+   Makes a Bootstrap jumbotron and a "create new list" button.
+*/
 function createLandingPage(){
    $(".page_body").append(
       '<div class="jumbotron">\
@@ -38,33 +52,98 @@ function createLandingPage(){
    $(".jumbotron__btn_create_list").on("click", createListHandler);
 }
 
+/**
+   Invoked on click of "create list" button on landing page
+*/
 function createListHandler(event){
+
    // Make an ajax call and wait to be issued a list slug
    $.ajax("./serverSide/RestInterface.php/Lists/new",{
          type: "POST",
-         success: onListCreate
+         success: function(data, textStatus, jqXHR){
+            
+            // Redirect to the new list
+            window.location = "./?" + data.slug;
+         }
       });
 }
 
-function onListCreate(data, textStatus, jqXHR){
-   // Redirect to the new list
-   window.location = "./?" + data.slug;
-}
-
-// Sets up the page for displaying a list.
-function displayListPage(){
-   $(".page_body").append('<div class="shareable_link__div"><span class="shareable_link__label">Link: </span><span class="shareable_link__span"></span><div>');
+/** 
+   If user navigated (or was redirected to) a specific list, construct the page
+*/
+function displayListPage(data, textStatus, jqXHR){
    
-   $(".shareable_link__span").text(window.location.href);
+   // Display a "shareable link" sub-banner that shows the address of the list
+   $(".page_body").append(
+      '<div class="shareable_link__div">\
+         <span class="shareable_link__label">Link: </span>\
+         <span class="shareable_link__span">'+ window.location.href +'</span>\
+      <div>');
    
-   // Add placeholder for title
-   $(".page_body").append('<div class="list_name"><h2 class="list_name__name"></h2><i class="fa fa-edit list_name__icon"></i><div>');
-   
+   // Add placeholder list title
+   $(".page_body").append(
+      '<div class="list_name">\
+         <h2 class="list_name__name">' + data.name + '</h2>\
+         <i class="fa fa-edit list_name__icon"></i>\
+      <div>');
+      
    // Attach List title edit button handler
    $(".list_name__icon").on("click", makeTitleEditable);
    
-   // Create place to add items
+   // Create places to add items
    $(".page_body").append('<div class="container to_do_list"></div>');
+   $(".page_body").append('<hr>');              // line separating to-do list from done list
+   $(".page_body").append('<div>Done:</div>')
+   $(".page_body").append('<div class="container done_list"></div>')
+   
+   // The items we get are not separated into checked and unchecked (i.e., done and not done),
+   // so we separate them out ourselves.
+   toDoItems = [];
+   doneItems = [];
+   
+   data.items.forEach(function(element){
+      
+      // Repackage the data so it's not typed as strings. 
+      // The 'checkedOrder' property is nullable so it may not be sent down. If it is,
+      // use the value, otherwise make it null.
+      var checkedOrder = element.hasOwnProperty("checkedOrder") ? element.checkedOrder : null;
+      itemData = {
+         checked: parseInt(element.checked),
+         order: parseInt(element.listOrder),
+         content: element.content,
+         checkedOrder: parseInt(checkedOrder)
+      }
+      
+      // Update largestListOrder (since it is an identifier, do this regardless of whether
+      // the item is checked or unchecked).
+      largestListOrder = Math.max(largestListOrder, itemData.listOrder);
+      
+      // Separate out the items
+      if (itemData.checked){
+         doneItems.push(itemData);
+      } else {
+         toDoItems.push(itemData);
+      }
+   });
+   
+   // Sort things according to their order.
+   toDoItems.sort(function(a, b){
+      return a.listOrder - b.listOrder;
+   });
+   
+   // Done items get sorted in reverse order, since whenever we check one off, it
+   // gets added to the top of the done list
+   doneItems.sort(function(a, b){
+      return b.doneOrder - a.doneOrder;
+   });
+   
+   // Finally, create the actual item divs.
+   toDoItems.forEach(function(element){
+      addListItem(element);
+   });
+   doneItems.forEach(function(element){
+      addListItem(element);
+   });
    
    // Add the footer   
    $("body").append('\
@@ -87,22 +166,13 @@ function displayListPage(){
    $(".record_new_item_btn").on("click", recordNewItemButtonHandler);
 }
 
-//TODO: comment, and move up
-var largestUncheckedListOrder = -1;
-
-// Populates todo list once AJAX call gets through.
-function onListLoad(data, textStatus, jqXHR){
+/** 
+   Creates an item card either in the to-do list container, or the done list container.
    
-   $(".list_name__name").text(data.name);
-   
-   data.items.forEach(function(element, index){
-      largestUncheckedListOrder = Math.max(largestUncheckedListOrder, element.listOrder)
-      addListItem(element.content, element.listOrder, element.checked);
-   });
-}
-
-// Adds an item card to the to do list container
-function addListItem(contents, orderIndex, checked=0){
+   itemData: an object containing "content", "order", and "checked" properties, and
+      optionally, "checkedOrder"
+*/
+function addListItem(itemData){
    var newItem = $(
       '<div class="card item_card">\
          <div class="row  item_card__row">\
@@ -111,7 +181,7 @@ function addListItem(contents, orderIndex, checked=0){
                   <i class="fa fa-check icon-large item_card__checkmark"></i>\
                </div>\
             </div>\
-            <div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + contents + '</div>\
+            <div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + itemData.content + '</div>\
             <div class="col-3 col-md-2 d-flex justify-content-end">\
                <button type="button" class="btn btn-default btn-sm item_card__btn item_card__edit_btn"><i class="fa fa-edit"></i></button>\
                <button type="button" class="btn btn-danger btn-sm item_card__btn item_card__delete_btn"><i class="fa fa-times"></i></button>\
@@ -119,29 +189,76 @@ function addListItem(contents, orderIndex, checked=0){
          </div>\
       </div>'
       );
-   $(".to_do_list").append(newItem);
-   newItem.data("order", orderIndex);
-   newItem.data("checked", checked);
+      
+   // Associate data with the jQuery objects corresponding to the top-level div
+   // (the item "card")
+   newItem.data({
+      order: itemData.order,
+      checkedOrder: itemData.checkedOrder,
+      checked: itemData.checked
+   });
    
-   if (checked == 0){
-      newItem.find(".item_card__checkmark").css("display", "none");
-   } else {
+   // Append the item into the correct container
+   if (itemData.checked != 0){
+      $(".done_list").append(newItem);
       newItem.find(".item_card__text").css("text-decoration", "line-through");
+   } else {
+      $(".to_do_list").append(newItem);
+      newItem.find(".item_card__checkmark").css("display", "none");
    }
    
+   // Associate handlers with parts of the item that are interactive
    newItem.find(".item_card__edit_btn").on("click", editItemHandler);
    newItem.find(".item_card__delete_btn").on("click", deleteItemHandler);
    newItem.find(".item_card__checkbox").on("click", checkBoxClickHandler);
    return newItem;
 }
 
+/**
+   Moves the item between the to-do and done lists, and updates database.
+*/
 function checkBoxClickHandler(event){
-   var $itemCard = $(this).closest(".item_card");
+   var $itemCard = $(this).closest(".item_card");  // get parent card
+   
+   // If this was a done item
    if ($itemCard.data("checked") != 0){
+      
       // Make it unchecked now
       $itemCard.find(".item_card__checkmark").css("display", "none");
       $itemCard.find(".item_card__text").css("text-decoration", "");
       $itemCard.data("checked", 0);
+      
+      // Move the item back to to-do section:
+      // Find its place
+      $toDoItems = $(".to_do_list .item_card");
+      var $itemToInsertAfter = null;
+      for (let i = 0; i < $toDoItems.length; ++i){
+         
+         // We insert after the last item that has a smaller order number
+         if ($($toDoItems[i]).data("order") < $itemCard.data("order")){
+            $itemToInsertAfter = $toDoItems[i];
+         } else {
+            break;
+         }
+      }
+      
+      // Before moving to new location, create a copy at old location that can smoothly
+      // disappear while the real one appears
+      $itemCopy = $itemCard.clone(false); // don't copy data or event handlers
+      $itemCopy.insertAfter($itemCard);
+      $itemCard.hide();                   // Start real one hidden so that you can appear smoothly
+      
+      // If this needs to be the first item in the list
+      if ($itemToInsertAfter == null) {
+         $(".to_do_list").prepend($itemCard);
+      
+      } else {
+         $itemCard.insertAfter($itemToInsertAfter);
+      }
+      
+      // Make the items disappear/appear smoothly
+      $itemCopy.slideUp(APPEAR_TRANSITION_DURATION, function(){$itemCopy.remove();});
+      $itemCard.slideDown(APPEAR_TRANSITION_DURATION);
       
       // Save item to the database
       $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
@@ -152,50 +269,68 @@ function checkBoxClickHandler(event){
          }
       });
       
+   // If the item was not checked before
    } else {
       // Make it checked
       $itemCard.find(".item_card__checkmark").css("display", "");
       $itemCard.find(".item_card__text").css("text-decoration", "line-through");
       $itemCard.data("checked", 1);
       
+      // Associate the correct checkedOrder, mostly to update the database later.
+      // This should be done before moving the item so we query the correct existing items.
+      var newCheckedOrder = 0;
+      var $doneItems = $(".done_list .item_card");
+      if ($doneItems.length > 0){                     // if there is a done item
+         newCheckedOrder = $doneItems.first().data("checkedOrder") + 1; // our item order is 1 higher
+      }
+      $itemCard.data("checkedOrder", newCheckedOrder);
+      
+      // Move the item down to the "checked" section:
+      // Create a copy that can smoothly disappear while the real one appears
+      $itemCopy = $itemCard.clone(false); // don't copy data or event handlers
+      $itemCopy.insertAfter($itemCard);
+      $itemCard.hide();                   // Start hidden so that you can appear smoothly
+      
+      // We always insert done items at the top of the done list
+      $(".done_list").prepend($itemCard); // moves the real itemCard
+      
+      // Make the items disappear/appear smoothly
+      $itemCopy.slideUp(APPEAR_TRANSITION_DURATION, function(){$itemCopy.remove();});
+      $itemCard.slideDown(APPEAR_TRANSITION_DURATION);
+
       // Save item to the database
       $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
          type: "POST",
          dataType: "json",
          data: {
-            checked: 1
+            checked: 1,
+            checkedOrder: newCheckedOrder
          }
       });
    }
 }
 
-// Helper function for finding whether a string is alphanumeric. Can also be
-// done with a regex, but probably won't be any faster.
-function stringIsAlphanumeric(someString){
-   for (let i = 0; i < someString.length; ++i){
-      let character = someString[i];
-      if (!(
-            (character <= 'Z' && character >= 'A')
-            || (character <= 'z' && character >= 'a')
-            || (character <= '9' && character >= '0')
-         )){
-            return false;
-         }
-   }
-   return true;
-}
-
-
+/**
+   Creates new item inside to-do list container.
+*/
 function newItemButtonHandler(event){
    
    // Create an item
-   ++largestUncheckedListOrder;  // it will have order one greater than the last
-   var $newItemCard = addListItem("", largestUncheckedListOrder);
+   ++largestListOrder;  // it will have order one greater than the last
+   var $newItemCard = addListItem({
+      content: "",
+      order: largestListOrder,
+      checked: 0,
+      checkedOrder: null
+   });
    
    // Immediately give the option to edit this item, and mark this as an item being created
    makeItemEditable($newItemCard, true);
 }
 
+/**
+   Item deletion handler
+*/
 function deleteItemHandler(event){
    var $itemCard = $(this).closest(".item_card");
    var listOrder = $itemCard.data("order");
@@ -206,6 +341,9 @@ function deleteItemHandler(event){
    });
 }
 
+/** 
+   Adds items using speech recognition
+*/
 function recordNewItemButtonHandler(event){
    
    // TODO: check what this checks (https? not chrome? not allowed?)
@@ -215,8 +353,13 @@ function recordNewItemButtonHandler(event){
    }
 
    // Create an item
-   ++largestUncheckedListOrder;  // it will have order one greater than the last
-   var $newItemCard = addListItem("", largestUncheckedListOrder);
+   ++largestListOrder;  // it will have order one greater than the last
+   var $newItemCard = addListItem({
+      content: "",
+      order: largestListOrder,
+      checked: 0,
+      checkedOrder: null
+   });
    
    var $itemContents = $newItemCard.find(".item_card__text").first();
    var $textArea = $('<textArea class="col-7 col-md-9 item_card__text"></textArea>');
@@ -236,8 +379,7 @@ function recordNewItemButtonHandler(event){
    // Gather interim results as user speaks
    recognition.interimResults = true;
 
-
-   // TODO: fill this out
+   // TODO: fill this out to give better error messages
    recognition.onerror = function(event) {
       if (event.error == 'no-speech') {
          recognitionFailed = true;
@@ -287,14 +429,19 @@ function recordNewItemButtonHandler(event){
    recognition.start();
 }
 
-
-// Handles button click on an "edit" button of a list item
+/** 
+   Handles button click on an "edit" button of a list item
+*/
 function editItemHandler(event){
    makeItemEditable($(this).closest(".item_card"));
 }
 
-// Makes a particular item card text editable (for editing or after creation)
-// itemIsNew: true if this is a new item
+/**
+   Makes a particular item card text editable (for editing or after creation)
+     
+   itemIsNew: true if this is a new item, which changes the interaction with the
+      database.
+*/
 function makeItemEditable(itemCard, itemIsNew){
    var $itemContents = itemCard.find(".item_card__text").first();
    var itemText = $itemContents.text();
@@ -311,7 +458,9 @@ function makeItemEditable(itemCard, itemIsNew){
    }
 }
 
-// Saves an edited item
+/**
+   Saves an edited item.
+*/
 function doneEditingItem(event){
 
    var $textArea = $(this);
@@ -336,7 +485,9 @@ function doneEditingItem(event){
    }
 }
 
-// Inserts a new item once user is done editing it
+/**
+   Inserts a new item once user is done editing it
+*/
 function doneCreatingItem(event){
 
    var $textArea = $(this);
@@ -357,15 +508,25 @@ function doneCreatingItem(event){
    $textArea.replaceWith('<div class="col-7 col-md-9 d-flex align-items-center item_card__text">' + newItemText + '</div>');
 }
 
+/**
+   Creates the page displayed when a list slug contains invalid characters
+*/
 function displayListInvalid(){
-   
+   $(".page_body").append('<h2 class="error_header">List Invalid</h2>');
+   $(".page_body").append('<div class="error_text">This list address is invalid.</div>');
 }
 
+/**
+   Creates the page displayed when a list with a specific slug is not found
+*/
 function displayListNotFound(){
-   // TODO: needs to be changed
-   $("div").text("List not found");
+   $(".page_body").append('<h2 class="error_header">List Not Found</h2>');
+   $(".page_body").append('<div class="error_text">We did not find this list.</div>');
 }
 
+/**
+   Handles click of the title edit button
+*/
 function makeTitleEditable(){
    var $titleText = $(".list_name__name");
    var titleText = $titleText.text();
@@ -377,6 +538,9 @@ function makeTitleEditable(){
    $inputArea.on("blur", doneEditingTitle);
 }
 
+/**
+   Saves edited title
+*/
 function doneEditingTitle(){
    var $inputArea = $(this);
    var newTitleText = $inputArea.val();
@@ -392,4 +556,22 @@ function doneEditingTitle(){
 
    // Replace input element with text
    $inputArea.replaceWith('<h2 class="list_name__name">' + newTitleText + '</h2>');
+}
+
+/**
+   Helper function for finding whether a string is alphanumeric. Can also be
+   done with a regex, but probably won't be any faster.
+*/
+function stringIsAlphanumeric(someString){
+   for (let i = 0; i < someString.length; ++i){
+      let character = someString[i];
+      if (!(
+            (character <= 'Z' && character >= 'A')
+            || (character <= 'z' && character >= 'a')
+            || (character <= '9' && character >= '0')
+         )){
+            return false;
+         }
+   }
+   return true;
 }

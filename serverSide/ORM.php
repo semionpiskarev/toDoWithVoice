@@ -197,7 +197,7 @@ class Item
       $this->listOrder = $orderNumber;
    }
    
-   function changeContents($newContents){
+   function setContents($newContents){
 
       $connectionObject = Database::getConnection();
       $resultHandle = $connectionObject->query(
@@ -214,11 +214,7 @@ class Item
       }
    }
    
-   function changeOrder($newOrderNumber){
-      
-   }
-   
-   function check(){
+   function setOrder($newOrderNumber){
       
    }
    
@@ -231,6 +227,22 @@ class Item
          . ' AND Items.listOrder = ' . $connectionObject->real_escape_string($this->listOrder)
       );
       
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
+   }
+   
+   function setCheckedOrder($newCheckedOrder){
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'UPDATE Items JOIN Lists ON Items.listId = Lists.listId' 
+         . ' SET Items.checkedOrder = ' . $connectionObject->real_escape_string($newCheckedOrder)
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->parentList->getSlug()) . '"'
+         . ' AND Items.listOrder = ' . $connectionObject->real_escape_string($this->listOrder)
+      );
+
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
          print('SQL error: ' . mysqli_error($connectionObject));

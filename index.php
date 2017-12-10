@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
    <head>
+      <title>Do-It</title>
+   
       <!-- Required meta tags for Bootstrap -->
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -28,7 +30,11 @@
    </head>
    <body>
       <nav class="navbar navbar-dark">
-         <span class="navbar-brand">Do-It</a>
+         <a href="<?php 
+            // We want this to link back to home page, but this will differ depending only
+            // which server this is running on (wwwx or wwwp)
+            print(strtok($_SERVER['REQUEST_URI'], '?')); // gets everything before '?'
+            ?>" class="navbar-brand">Do-It</a>
       </nav>
       
       <div class="page_body"></div>
