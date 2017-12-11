@@ -52,7 +52,7 @@ class Database
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 1: ' . mysqli_error($connectionObject));
          exit();
       }
       
@@ -106,7 +106,7 @@ class ToDoList
       
          if (!$listDataResultHandle){  // Check for SQL error
             http_response_code(500);
-            print('SQL error: ' . mysqli_error($connectionObject));
+            print('SQL error 2: ' . mysqli_error($connectionObject));
             exit();
          }
 
@@ -127,7 +127,7 @@ class ToDoList
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 3: ' . mysqli_error($connectionObject));
          exit();
       }
       
@@ -141,11 +141,11 @@ class ToDoList
       $listId = $this->getData()->listId;
       
       $resultHandle = $connectionObject->query(
-         'SELECT content, checked, listOrder FROM Items WHERE listId = ' . $connectionObject->real_escape_string($listId) . ';');
+         'SELECT content, checked, listOrder, checkedOrder FROM Items WHERE listId = ' . $connectionObject->real_escape_string($listId) . ';');
 
       if (!$resultHandle){    // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 4: ' . mysqli_error($connectionObject));
          exit();
       }
 
@@ -180,7 +180,7 @@ class ToDoList
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 5: ' . mysqli_error($connectionObject));
          exit();
       }
    }
@@ -194,7 +194,7 @@ class ToDoList
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 6: ' . mysqli_error($connectionObject));
          exit();
       }
    }
@@ -208,9 +208,47 @@ class ToDoList
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 7: ' . mysqli_error($connectionObject));
          exit();
       }
+   }
+   
+   function reorder($newSeq){
+      $connectionObject = Database::getConnection();
+      
+      $resultHandle = $connectionObject->query(
+            'SELECT MIN(listOrder), MAX(listOrder) FROM Items INNER JOIN Lists ON Lists.slug = "' . $connectionObject->real_escape_string($this->slug) . '"'
+            . ' AND Lists.listId = Items.listId'
+         );
+      
+      $minMaxListOrderData = $resultHandle->fetch_array(); 
+
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error 7.5: ' . mysqli_error($connectionObject));
+         exit();
+      }
+      
+      if ($minMaxListOrderData[0] >= count($newSeq)) {
+         $offset = 0;
+      } else {
+         $offset = $minMaxListOrderData[1] + 1;
+      }
+      for ($i = 0; $i < count($newSeq); $i++) {
+         $resultHandle = $connectionObject->query(
+            'UPDATE Items INNER JOIN Lists ON Lists.slug = "' . $connectionObject->real_escape_string($this->slug) . '"'
+            . ' AND Lists.listId = Items.listId AND Items.listOrder = "' . $connectionObject->real_escape_string($newSeq[$i]) . '"'
+            . ' SET Items.listOrder = "' . $connectionObject->real_escape_string($i + $offset) . '"'
+         );
+      }
+      
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error 8: ' . mysqli_error($connectionObject));
+         exit();
+      }
+      
+      $this->data = false;
    }
 }
    
@@ -237,7 +275,7 @@ class Item
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 9: ' . mysqli_error($connectionObject));
          exit();
       }
    }
@@ -257,7 +295,7 @@ class Item
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 10: ' . mysqli_error($connectionObject));
          exit();
       }
    }
@@ -273,7 +311,7 @@ class Item
 
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 11: ' . mysqli_error($connectionObject));
          exit();
       }
    }
@@ -289,7 +327,7 @@ class Item
       
       if (!$resultHandle){  // Check for SQL error
          http_response_code(500);
-         print('SQL error: ' . mysqli_error($connectionObject));
+         print('SQL error 12: ' . mysqli_error($connectionObject));
          exit();
       }
    }

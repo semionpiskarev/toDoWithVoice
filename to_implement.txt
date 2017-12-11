@@ -1,16 +1,12 @@
 Tweak:
 Make item content input resize as things are written into it.
 Make items allow for newlines.
-Make buttons on items not stretch vertically (i.e., fix their size)
-Make items actually save to database once edited.
+
+
 
 Implement:
-
-A proper page to display when a list is not found
-A home page with a "create list" button
-Checkbox and cross-out of list items
-Voice recording
+Make reordering not reload all items, and not increase listOrder numbers
+Use cookies or something else instead of keeping user password in JS
 A way to reorder list items
-Optional password protection for lists
 Removal of old and/or empty lists
 Protection of database (from too many requests, etc)

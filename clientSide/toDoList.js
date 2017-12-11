@@ -231,6 +231,62 @@ function displayListPage(data){
    $(".page_body").append('<div>Done:</div>')
    $(".page_body").append('<div class="container done_list"></div>')
    
+   populateListItems(data);
+   
+   // jQuery UI code for draggable parts
+   $(".to_do_list").sortable({
+      axis: "y",
+      revert: 200,      // how quickly item snaps to place
+      cursor: "move",   // what the cursor should look like when dragging
+      stop: function(event, ui) {
+         var newSeq = [];
+         var children = this.children;
+         for (var i = 0; i < children.length; i++) {
+            var child = children[i];
+            newSeq.push($(child).data("listOrder"));
+         }
+         
+         $.ajax("./serverSide/RestInterface.php/Lists/order/" + queryString,{
+            type: "POST",
+            dataType: "json",
+            data: {
+               password: pw,
+               seq: newSeq
+            },
+            success: populateListItems,
+            error: function(data){
+               console.log(data);
+            }
+         });
+      }
+   });
+   
+   // Add the footer   
+   $("body").append('\
+      <footer class="button_footer">\
+         <div class="button_footer__contents">\
+            <div class="container d-flex justify-content-center">\
+               <button type="footer_button" class="btn btn-success btn-md button_footer__btn create_new_item_btn">\
+                  <i class="fa fa-plus"></i> Add Item\
+               </button>\
+               <button type="button" class="btn btn-danger btn-md button_footer__btn record_new_item_btn">\
+                  <i class="fa fa-microphone"></i> Record\
+               </button>\
+            </div>\
+         </div>\
+      </footer>'
+      );
+      
+   // Add handlers to the footer buttons
+   $(".create_new_item_btn").on("click", newItemButtonHandler);
+   $(".record_new_item_btn").on("click", recordNewItemButtonHandler);
+}
+
+function populateListItems(data){
+   
+   $(".to_do_list").empty();
+   $(".done_list").empty();
+   
    // The items we get are not separated into checked and unchecked (i.e., done and not done),
    // so we separate them out ourselves.
    toDoItems = [];
@@ -279,26 +335,6 @@ function displayListPage(data){
    doneItems.forEach(function(element){
       addListItem(element);
    });
-   
-   // Add the footer   
-   $("body").append('\
-      <footer class="button_footer">\
-         <div class="button_footer__contents">\
-            <div class="container d-flex justify-content-center">\
-               <button type="footer_button" class="btn btn-success btn-md button_footer__btn create_new_item_btn">\
-                  <i class="fa fa-plus"></i> Add Item\
-               </button>\
-               <button type="button" class="btn btn-danger btn-md button_footer__btn record_new_item_btn">\
-                  <i class="fa fa-microphone"></i> Record\
-               </button>\
-            </div>\
-         </div>\
-      </footer>'
-      );
-      
-   // Add handlers to the footer buttons
-   $(".create_new_item_btn").on("click", newItemButtonHandler);
-   $(".record_new_item_btn").on("click", recordNewItemButtonHandler);
 }
 
 /** 

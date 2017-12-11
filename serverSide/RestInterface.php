@@ -72,6 +72,32 @@ if ($pathInfo[1] == "Items"){ // first entry is blank (starts with '/')
       exit();
       
    // Otherwise, we're updating the list data
+   } else if ($pathInfo[2] == 'order'){
+      
+      $list = Database::getList($pathInfo[3]);
+      
+      // Only allow this if the list is already unlocked
+      $listData = $list->getData();      
+      verifyThatListIsAccessible($listData); // exits if credentials invalid
+      
+      $list->reorder($_REQUEST['seq']);
+      
+      // Make sure list exists
+      if ($listData == NULL){   // Check for existence of list
+         http_response_code(404);
+         print('List not found: ' . $this->slug);
+         exit();
+      }
+      
+      $listItems = $list->getItemsData();
+      $toSend = new FullListResponse($listData->title, $listItems, $listData->passwordProtected);
+         
+      // Create the JSON response
+      header("Content-type: application/json");
+      print(json_encode($toSend));
+      
+      exit();
+      
    } else {
       
       // Only allow this if the list is already unlocked
