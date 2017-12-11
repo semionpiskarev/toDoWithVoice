@@ -2,13 +2,17 @@
    Core client-side code for interacting with the to-do list app.
 */
 
-// Since we use the "order" property as an identifier, we need to keep
-// track of the largest order value to insert new items. The database will
-// automatically set the order, so this is just for our own record keeping.
+// Since we use the "listOrder" property as an identifier, we need to keep
+// track of the largest listOrder value to insert new items. The database will
+// automatically set the listOrder, so this is just for our own record keeping.
 var largestListOrder = -1;
 
 // Sets how quickly items appear/disappear when checked and unchecked
 const APPEAR_TRANSITION_DURATION = 350;
+
+// In the case that a list requires a password, that password needs to be sent
+// with all operations. A better workaround would be to use a cookie.
+var pw = "";
 
 // Page initialization
 $(document).ready(function(){
@@ -21,11 +25,28 @@ $(document).ready(function(){
    // that the user could make up any kind of AJAX call.   
    } else if (stringIsAlphanumeric(queryString)){
       
-      // Make an AJAX call to our REST interface to get the list items 
+      // Make an AJAX call to see the list data. If the list is password protected,
+      // we'll just get an empty object with that property set to 1.
       $.ajax("./serverSide/RestInterface.php/" + queryString,{
          type: "GET",
          dataType: "json",
-         success: displayListPage, // fills in title, list items, activates buttons
+         success: function(data, textStatus, jqXHR){
+            if (data.passwordProtected != 0){
+               
+               // Display the password modal
+               $("#enter_password_modal").modal("show");
+               
+               // Associate handler with password submit button
+               $(".enter_password_modal__submit").on("click", enterPasswordSubmit);
+               
+            } else {
+               displayListPage(data);
+               
+               // Show the unlocked button (i.e., button for locking the list), and
+               // associate the password set handler with the button inside
+               $(".lock_list_btn").css("display","");
+            }
+         }, // fills in title, list items, activates buttons
          error: displayListNotFound
       });
       
@@ -33,6 +54,104 @@ $(document).ready(function(){
       displayListInvalid();
    }
 });
+
+function enterPasswordSubmit(){
+   
+   // Disable to password text area
+   $("#enter_password_modal__password").attr("disabled", "").addClass("disabled_password_text_area");
+   var typedPassword = $("#enter_password_modal__password").val();
+   
+   // Make an AJAX request for list items with the password 
+   $.ajax("./serverSide/RestInterface.php/" + queryString,{
+      type: "GET",
+      dataType: "json",
+      data: {
+         password: typedPassword
+      },
+      success: function(data){
+         pw = typedPassword;
+         
+         $("#enter_password_modal").modal("hide");
+         displayListPage(data);  // fills in title, list items, activates buttons
+         
+         // Show the locked button (i.e., button for unlocking the list), and set
+         // correct function handler for the button inside
+         $(".unlock_list_btn").css("display","");
+      },
+      error: function(){
+         $(".enter_password_error_text").text("Incorrect password.");
+         $("#enter_password_modal__password").removeAttr("disabled").removeClass("disabled_password_text_area");
+      }
+   });
+}
+
+function setPasswordSubmit(){
+   var enteredPassword = $("#lock_list_modal__password").val();
+   if (enteredPassword == ""){
+      $(".set_password_error_text").text("Invalid password");
+      return;
+   }
+   if ($("#lock_list_modal__confirm_password").val() != enteredPassword){
+      $(".set_password_error_text").text("Passwords must match");
+      return;
+   }
+   
+   // Go ahead and reset and hide the modal while the ajax request goes through.
+   // However, disable the button until it finishes
+   $(".set_password_error_text").text("");
+   $("#lock_list_modal").modal("hide");
+   $(".lock_list_btn").prop("disabled", true);
+
+   $.ajax("./serverSide/RestInterface.php/Lists/" + queryString,{
+      type: "POST",
+      data: {
+         password: pw,
+         newPassword: enteredPassword
+      },
+      success: function(data){
+         
+         // Remember the password
+         pw = enteredPassword;
+         
+         // Switch the buttons
+         $(".lock_list_btn").css("display", "none").prop("disabled", "");
+         $(".unlock_list_btn").css("display", "");
+      },
+      error: function(){
+         // Make it possible to try again
+         $(".lock_list_btn").prop("disabled", "");
+      }
+   });
+}
+
+function removePasswordSubmit(){
+   
+   // Go ahead and reset and hide the modal while the ajax request goes through.
+   // However, disable the button until it finishes
+   $("#unlock_list_modal").modal("hide");
+   $(".unlock_list_btn").prop("disabled", true);
+
+   $.ajax("./serverSide/RestInterface.php/Lists/" + queryString,{
+      type: "POST",
+      data: {
+         password: pw,
+         passwordProtected: 0
+      },
+      success: function(data){
+         
+         // Reset the stored password
+         pw = "";
+         
+         // Switch the buttons
+         $(".unlock_list_btn").css("display", "none").prop("disabled", "");
+         $(".lock_list_btn").css("display", "");
+      },
+      error: function(){
+         // Make it possible to try again
+         $(".unlock_list_btn").prop("disabled", "");
+      }
+   });
+}
 
 /** 
    Makes a Bootstrap jumbotron and a "create new list" button.
@@ -71,7 +190,23 @@ function createListHandler(event){
 /** 
    If user navigated (or was redirected to) a specific list, construct the page
 */
-function displayListPage(data, textStatus, jqXHR){
+function displayListPage(data){
+   
+   // Add both the locked and unlocked buttons, but hide both of them
+   $(".page_navbar").append(
+      '<button type="button" class="btn btn-info lock_manage_btn lock_list_btn" data-toggle="modal" data-target="#lock_list_modal">\
+         <i class="fa fa-unlock"></i>\
+      </button>\
+      <button type="button" class="btn btn-warning lock_manage_btn unlock_list_btn" data-toggle="modal" data-target="#unlock_list_modal">\
+         <i class="fa fa-lock"></i>\
+      </button>'
+   );
+   $(".lock_manage_btn").css("display", "none");
+   
+   // Since the modals are so hard to write out, they are in the actual served html.
+   // but go ahead and bind the correct functions to the buttons inside them.
+   $(".remove_password_btn").on("click",removePasswordSubmit);
+   $(".set_password_btn").on("click",setPasswordSubmit);
    
    // Display a "shareable link" sub-banner that shows the address of the list
    $(".page_body").append(
@@ -109,7 +244,7 @@ function displayListPage(data, textStatus, jqXHR){
       var checkedOrder = element.hasOwnProperty("checkedOrder") ? element.checkedOrder : null;
       itemData = {
          checked: parseInt(element.checked),
-         order: parseInt(element.listOrder),
+         listOrder: parseInt(element.listOrder),
          content: element.content,
          checkedOrder: parseInt(checkedOrder)
       }
@@ -126,7 +261,7 @@ function displayListPage(data, textStatus, jqXHR){
       }
    });
    
-   // Sort things according to their order.
+   // Sort things according to their listOrder.
    toDoItems.sort(function(a, b){
       return a.listOrder - b.listOrder;
    });
@@ -134,7 +269,7 @@ function displayListPage(data, textStatus, jqXHR){
    // Done items get sorted in reverse order, since whenever we check one off, it
    // gets added to the top of the done list
    doneItems.sort(function(a, b){
-      return b.doneOrder - a.doneOrder;
+      return b.checkedOrder - a.checkedOrder;
    });
    
    // Finally, create the actual item divs.
@@ -169,7 +304,7 @@ function displayListPage(data, textStatus, jqXHR){
 /** 
    Creates an item card either in the to-do list container, or the done list container.
    
-   itemData: an object containing "content", "order", and "checked" properties, and
+   itemData: an object containing "content", "listOrder", and "checked" properties, and
       optionally, "checkedOrder"
 */
 function addListItem(itemData){
@@ -193,7 +328,7 @@ function addListItem(itemData){
    // Associate data with the jQuery objects corresponding to the top-level div
    // (the item "card")
    newItem.data({
-      order: itemData.order,
+      listOrder: itemData.listOrder,
       checkedOrder: itemData.checkedOrder,
       checked: itemData.checked
    });
@@ -234,8 +369,8 @@ function checkBoxClickHandler(event){
       var $itemToInsertAfter = null;
       for (let i = 0; i < $toDoItems.length; ++i){
          
-         // We insert after the last item that has a smaller order number
-         if ($($toDoItems[i]).data("order") < $itemCard.data("order")){
+         // We insert after the last item that has a smaller listOrder number
+         if ($($toDoItems[i]).data("listOrder") < $itemCard.data("listOrder")){
             $itemToInsertAfter = $toDoItems[i];
          } else {
             break;
@@ -261,10 +396,11 @@ function checkBoxClickHandler(event){
       $itemCard.slideDown(APPEAR_TRANSITION_DURATION);
       
       // Save item to the database
-      $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
+      $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("listOrder"),{
          type: "POST",
          dataType: "json",
          data: {
+            password: pw,
             checked: 0
          }
       });
@@ -299,10 +435,11 @@ function checkBoxClickHandler(event){
       $itemCard.slideDown(APPEAR_TRANSITION_DURATION);
 
       // Save item to the database
-      $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
+      $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("listOrder"),{
          type: "POST",
          dataType: "json",
          data: {
+            password: pw,
             checked: 1,
             checkedOrder: newCheckedOrder
          }
@@ -316,10 +453,10 @@ function checkBoxClickHandler(event){
 function newItemButtonHandler(event){
    
    // Create an item
-   ++largestListOrder;  // it will have order one greater than the last
+   ++largestListOrder;  // it will have listOrder one greater than the last
    var $newItemCard = addListItem({
       content: "",
-      order: largestListOrder,
+      listOrder: largestListOrder,
       checked: 0,
       checkedOrder: null
    });
@@ -333,11 +470,14 @@ function newItemButtonHandler(event){
 */
 function deleteItemHandler(event){
    var $itemCard = $(this).closest(".item_card");
-   var listOrder = $itemCard.data("order");
+   var listOrder = $itemCard.data("listOrder");
    $itemCard.remove();
    
    $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/delete/" + listOrder,{
-      type: "POST"
+      type: "POST",
+      data: {
+         password: pw
+      }
    });
 }
 
@@ -353,10 +493,10 @@ function recordNewItemButtonHandler(event){
    }
 
    // Create an item
-   ++largestListOrder;  // it will have order one greater than the last
+   ++largestListOrder;  // it will have listOrder one greater than the last
    var $newItemCard = addListItem({
       content: "",
-      order: largestListOrder,
+      listOrder: largestListOrder,
       checked: 0,
       checkedOrder: null
    });
@@ -412,8 +552,16 @@ function recordNewItemButtonHandler(event){
       $(".recording_text_area").val(interimTranscript+finalTranscript);
    };
 
+   // We want recording to stop if the user clicks anywhere else, or if recording stops.
+   $("html").on("mousedown", function(){
+      recognition.stop();
+   });
+   
    // At the very end, update the database
    recognition.onend = function() {
+      
+      // We no longer need that mousedown listener to see if we should stop
+      $("html").off("mousedown");
       
       // If something went wrong, we'll still display a blank entry
       if (recognitionFailed) {
@@ -423,7 +571,6 @@ function recordNewItemButtonHandler(event){
       // Pass the text area that we have been adding text to to our function
       // that completes new item creation.
       doneCreatingItem.call($(".recording_text_area").get(0));
-      
    };
 
    recognition.start();
@@ -466,13 +613,14 @@ function doneEditingItem(event){
    var $textArea = $(this);
    var newItemText = $textArea.val();
    var $itemCard = $textArea.closest(".item_card");
-   var itemOrderIndex = $itemCard.data("order");
+   var itemOrderIndex = $itemCard.data("listOrder");
    
    // Save item to the database
-   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("order"),{
+   $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/" + $itemCard.data("listOrder"),{
       type: "POST",
       dataType: "json",
       data: {
+         password: pw,
          content: newItemText
          }
    });
@@ -493,13 +641,14 @@ function doneCreatingItem(event){
    var $textArea = $(this);
    var newItemText = $textArea.val();
    var $itemCard = $textArea.closest(".item_card");
-   var itemOrderIndex = $itemCard.data("order");
+   var itemOrderIndex = $itemCard.data("listOrder");
    
    // Save item to the database
    $.ajax("./serverSide/RestInterface.php/Items/" + queryString + "/new",{
       type: "POST",
       dataType: "json",
       data: {
+         password: pw,
          content: newItemText
          }
    });
@@ -550,6 +699,7 @@ function doneEditingTitle(){
       type: "POST",
       dataType: "json",
       data: {
+         password: pw,
          title: newTitleText
          }
    });

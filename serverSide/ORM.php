@@ -63,7 +63,7 @@ class Database
    private static function createRandomSlug(){
       $symbols = array(0,1,2,3,4,5,6,7,8,9,'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z');
       
-      $slugLength = 10;
+      $slugLength = 16;
       $slug = "";
       
       for ($i = 0; $i < $slugLength; ++$i){
@@ -73,7 +73,7 @@ class Database
    }
    
    # Gives an object for manipulating a list. Note that a SQL query is only issued
-   # one something specific is requested, to avoid unnecessary queries. To get an
+   # once something specific is requested, to avoid unnecessary queries. To get an
    # actual row from the "Lists" table, call getData() on the resulting object.
    static function getList($listSlug){
       return new ToDoList($listSlug);
@@ -176,6 +176,34 @@ class ToDoList
          . ' FROM Lists LEFT JOIN Items ON Lists.listId = Items.listId'
          . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->getSlug()) . '"'
          . ' GROUP BY Lists.listId'
+      );
+      
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
+   }
+   
+   function lock($newPassword){
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'UPDATE Lists SET Lists.passwordProtected = 1, Lists.hashedPassword = "' . $connectionObject->real_escape_string($newPassword) . '"'
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->slug) . '"'
+      );
+      
+      if (!$resultHandle){  // Check for SQL error
+         http_response_code(500);
+         print('SQL error: ' . mysqli_error($connectionObject));
+         exit();
+      }
+   }
+   
+   function unlock(){
+      $connectionObject = Database::getConnection();
+      $resultHandle = $connectionObject->query(
+         'UPDATE Lists SET Lists.passwordProtected = 0, Lists.hashedPassword = NULL'
+         . ' WHERE Lists.slug = "' . $connectionObject->real_escape_string($this->slug) . '"'
       );
       
       if (!$resultHandle){  // Check for SQL error

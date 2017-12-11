@@ -91,3 +91,10 @@
 .error_header, .error_text{
    margin: 20px;
 }
+
+.modal_grid_row {
+   margin-bottom: 10px;
+}
+.modal_error_text {
+   min-height: 1rem;
+}
